@@ -1,0 +1,95 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            Int           @id @default(autoincrement())
+  email         String        @unique
+  password      String
+  name          String
+  role          String        // "CITIZEN" or "OFFICER"
+  departmentId  Int?          // If role is OFFICER, they belong to a department
+  createdAt     DateTime      @default(now())
+
+  // Relations
+  department      Department?   @relation(fields: [departmentId], references: [id])
+  complaints      Complaint[]   @relation("CitizenComplaints")
+  assignedIssues  Complaint[]   @relation("OfficerComplaints")
+  votes           Vote[]
+  follows         Follow[]
+  civicUpdates    CivicUpdate[]
+}
+
+model Department {
+  id          Int         @id @default(autoincrement())
+  name        String      @unique // e.g., "Water Supply", "Roads & Bridges", "Electricity", "Sanitation", "Parks & Public Spaces"
+  description String?
+  
+  // Relations
+  users       User[]
+  complaints  Complaint[]
+}
+
+model Complaint {
+  id           Int        @id @default(autoincrement())
+  title        String
+  category     String     // Sanitation, Water, Roads, Electricity, Parks, etc.
+  status       String     @default("PENDING") // "PENDING", "IN_PROGRESS", "RESOLVED"
+  lat          Float
+  lng          Float
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  
+  // Foreign Keys
+  userId       Int        // Citizen who reported it
+  officerId    Int?       // Officer assigned to resolve it
+  departmentId Int?       // Department it belongs to
+
+  // Relations
+  user         User       @relation("CitizenComplaints", fields: [userId], references: [id])
+  officer      User?      @relation("OfficerComplaints", fields: [officerId], references: [id])
+  department   Department? @relation(fields: [departmentId], references: [id])
+  votes        Vote[]
+  follows      Follow[]
+}
+
+model Vote {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  complaintId Int
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id])
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, complaintId]) // Enforces "One upvote per user"
+}
+
+model Follow {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  complaintId Int
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id])
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, complaintId]) // Enforces user only follows a complaint once
+}
+
+model CivicUpdate {
+  id          Int      @id @default(autoincrement())
+  title       String
+  content     String
+  type        String   // "Road Construction", "Water Supply Maintenance", "Power Shutdown", "New Bridge Opening", "Road Closure", "Park Renovation"
+  createdAt   DateTime @default(now())
+  officerId   Int
+
+  // Relations
+  officer     User     @relation(fields: [officerId], references: [id])
+}
