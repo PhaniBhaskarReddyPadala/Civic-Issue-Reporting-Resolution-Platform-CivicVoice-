@@ -23,8 +23,8 @@ COPY backend/src ./backend/src/
 # Install backend dependencies
 RUN npm install --prefix backend
 
-# Generate Prisma Client
-RUN npx prisma generate --schema=backend/prisma/schema.prisma
+# Generate Prisma Client (use locally installed v5 binary — NOT npx which pulls v7)
+RUN ./backend/node_modules/.bin/prisma generate --schema=backend/prisma/schema.prisma
 
 # Build TypeScript
 RUN npm run build --prefix backend
@@ -57,8 +57,8 @@ COPY --from=builder /app/backend/package-lock.json ./
 # Install production dependencies
 RUN npm install --omit=dev
 
-# Generate Prisma Client inside production image
-RUN npx prisma generate --schema=./prisma/schema.prisma
+# Generate Prisma Client inside production image (use locally installed v5 binary)
+RUN ./node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
 
 # Render provides PORT automatically
 EXPOSE 10000
