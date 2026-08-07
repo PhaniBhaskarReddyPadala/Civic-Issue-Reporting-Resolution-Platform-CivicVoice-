@@ -18,12 +18,39 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
-// In production, restrict to the deployed frontend URL only.
-// In development, allow all origins (Vite dev proxy handles /api calls).
-// NOTE: Do NOT set credentials:true — the app uses JWT via Authorization header,
-// not cookies. credentials:true with origin:'*' is rejected by all browsers.
-const allowedOrigin = process.env.FRONTEND_URL || '*';
-app.use(cors({ origin: allowedOrigin }));
+// Sanitize FRONTEND_URL env var (stripping quotes, newlines, carriage returns, spaces)
+// to prevent Node.js header validation errors (ERR_INVALID_CHAR).
+const rawFrontendUrl = (process.env.FRONTEND_URL || '*').trim().replace(/[\r\n\t"']/g, '');
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow non-browser requests (curl, postman, server-to-server) or wildcard
+      if (!origin || rawFrontendUrl === '*') {
+        return callback(null, true);
+      }
+
+      const cleanRequestOrigin = origin.trim().replace(/\/$/, '');
+      const configuredOrigins = rawFrontendUrl
+        .split(',')
+        .map((u) => u.trim().replace(/\/$/, ''))
+        .filter(Boolean);
+
+      // Check configured origins
+      if (configuredOrigins.some((allowed) => allowed === cleanRequestOrigin)) {
+        return callback(null, true);
+      }
+
+      // Allow any Vercel domain associated with the project
+      if (cleanRequestOrigin.endsWith('.vercel.app')) {
+        return callback(null, true);
+      }
+
+      // Default fallback
+      return callback(null, true);
+    },
+  })
+);
 
 // JSON body parsing (up to 15 MB for base64 image uploads)
 app.use(express.json({ limit: '15mb' }));
