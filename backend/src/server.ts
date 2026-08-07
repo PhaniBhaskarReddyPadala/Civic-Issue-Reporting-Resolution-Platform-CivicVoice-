@@ -20,13 +20,10 @@ const PORT = process.env.PORT || 5000;
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // In production, restrict to the deployed frontend URL only.
 // In development, allow all origins (Vite dev proxy handles /api calls).
+// NOTE: Do NOT set credentials:true — the app uses JWT via Authorization header,
+// not cookies. credentials:true with origin:'*' is rejected by all browsers.
 const allowedOrigin = process.env.FRONTEND_URL || '*';
-app.use(
-  cors({
-    origin: allowedOrigin,
-    credentials: true,
-  })
-);
+app.use(cors({ origin: allowedOrigin }));
 
 // JSON body parsing (up to 15 MB for base64 image uploads)
 app.use(express.json({ limit: '15mb' }));
