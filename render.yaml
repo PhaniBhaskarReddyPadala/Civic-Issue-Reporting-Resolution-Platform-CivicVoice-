@@ -19,6 +19,7 @@ services:
       - key: JWT_SECRET
         sync: false
       # ── Set to your Vercel frontend URL after first deploy ──
+      # https://civic-issue-reporting-resolution-platform-civic-voice.vercel.app
       - key: FRONTEND_URL
         sync: false
       # ── Optional: Cloudinary image CDN ──
