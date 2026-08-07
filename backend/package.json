@@ -4,7 +4,7 @@
   "description": "CivicFlow Backend",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "dev": "nodemon --watch src --ext ts --exec ts-node -T src/server.ts",
     "prisma:generate": "prisma generate",

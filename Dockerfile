@@ -1,39 +1,30 @@
 # ============================================================
 # Stage 1 — Builder
 # ============================================================
-
 FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
-# Install OpenSSL (required by Prisma)
+# Install OpenSSL (required by Prisma engine)
 RUN apt-get update && \
     apt-get install -y openssl && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy workspace manifests
+# Copy workspace & backend manifests
 COPY package.json package-lock.json ./
-
-# Copy backend
 COPY backend/package.json backend/package-lock.json ./backend/
 COPY backend/tsconfig.json ./backend/
 COPY backend/prisma ./backend/prisma/
 COPY backend/src ./backend/src/
 
-# Install backend dependencies
+# Install dependencies & build (prisma generate + tsc)
 RUN npm install --prefix backend
-
-# Generate Prisma Client (use locally installed v5 binary — NOT npx which pulls v7)
-RUN ./backend/node_modules/.bin/prisma generate --schema=backend/prisma/schema.prisma
-
-# Build TypeScript
 RUN npm run build --prefix backend
 
 # ============================================================
 # Stage 2 — Production Runner
 # ============================================================
-
-FROM node:20-bookworm-slim
+FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
 
@@ -44,24 +35,14 @@ RUN apt-get update && \
     apt-get install -y openssl && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy compiled application
+# Copy compiled output and node_modules directly from builder
 COPY --from=builder /app/backend/dist ./dist
-
-# Copy Prisma files
 COPY --from=builder /app/backend/prisma ./prisma
-
-# Copy package files
-COPY --from=builder /app/backend/package.json ./
-COPY --from=builder /app/backend/package-lock.json ./
-
-# Install production dependencies
-RUN npm install --omit=dev
-
-# Generate Prisma Client inside production image (use locally installed v5 binary)
-RUN ./node_modules/.bin/prisma generate --schema=./prisma/schema.prisma
+COPY --from=builder /app/backend/node_modules ./node_modules
+COPY --from=builder /app/backend/package.json ./package.json
 
 # Render provides PORT automatically
 EXPOSE 10000
 
-# Start application
+# Start compiled application
 CMD ["node", "dist/server.js"]
