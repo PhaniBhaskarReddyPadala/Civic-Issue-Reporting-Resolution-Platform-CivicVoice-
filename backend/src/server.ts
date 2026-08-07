@@ -18,39 +18,31 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
-// Sanitize FRONTEND_URL env var (stripping quotes, newlines, carriage returns, spaces)
-// to prevent Node.js header validation errors (ERR_INVALID_CHAR).
-const rawFrontendUrl = (process.env.FRONTEND_URL || '*').trim().replace(/[\r\n\t"']/g, '');
+// Native CORS middleware: sanitizes request origins to permanently eliminate Node.js ERR_INVALID_CHAR header exceptions.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow non-browser requests (curl, postman, server-to-server) or wildcard
-      if (!origin || rawFrontendUrl === '*') {
-        return callback(null, true);
-      }
+  if (origin) {
+    const cleanOrigin = String(origin).replace(/[\r\n\t\0"']/g, '').trim();
+    if (cleanOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', cleanOrigin);
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
 
-      const cleanRequestOrigin = origin.trim().replace(/\/$/, '');
-      const configuredOrigins = rawFrontendUrl
-        .split(',')
-        .map((u) => u.trim().replace(/\/$/, ''))
-        .filter(Boolean);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 
-      // Check configured origins
-      if (configuredOrigins.some((allowed) => allowed === cleanRequestOrigin)) {
-        return callback(null, true);
-      }
+  // Handle preflight OPTIONS requests immediately
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
 
-      // Allow any Vercel domain associated with the project
-      if (cleanRequestOrigin.endsWith('.vercel.app')) {
-        return callback(null, true);
-      }
-
-      // Default fallback
-      return callback(null, true);
-    },
-  })
-);
+  next();
+});
 
 // JSON body parsing (up to 15 MB for base64 image uploads)
 app.use(express.json({ limit: '15mb' }));
