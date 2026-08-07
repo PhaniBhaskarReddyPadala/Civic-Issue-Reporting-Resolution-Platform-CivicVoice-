@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import {
   Megaphone,
   User,
@@ -52,15 +53,44 @@ export const CitizenDashboard: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  useEffect(() => {
-    axios.get(`/api/complaints?sort=${sortOrder === 'trending' ? 'trending' : 'recent'}`)
-      .then((res) => setComplaints(res.data))
-      .catch((err) => console.error(err));
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-    axios.get('/api/civic-updates')
-      .then((res) => setUpdates(res.data))
-      .catch((err) => console.error(err));
+  useEffect(() => {
+    setCurrentPage(1);
+    setComplaints([]);
+
+    Promise.all([
+      axios.get(`/api/complaints?sort=${sortOrder}&page=1&limit=12`),
+      axios.get('/api/civic-updates'),
+    ])
+      .then(([complaintsRes, updatesRes]) => {
+        setComplaints(complaintsRes.data.data);
+        setHasNextPage(complaintsRes.data.pagination.hasNextPage);
+        setUpdates(updatesRes.data);
+      })
+      .catch((err) => {
+        console.error(err);
+        toast.error('Failed to load complaints.');
+      });
   }, [sortOrder, refreshTrigger]);
+
+  const handleLoadMore = async () => {
+    const nextPage = currentPage + 1;
+    setLoadingMore(true);
+    try {
+      const res = await axios.get(`/api/complaints?sort=${sortOrder}&page=${nextPage}&limit=12`);
+      setComplaints((prev) => [...prev, ...res.data.data]);
+      setHasNextPage(res.data.pagination.hasNextPage);
+      setCurrentPage(nextPage);
+    } catch (err) {
+      toast.error('Failed to load more complaints.');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -358,6 +388,22 @@ export const CitizenDashboard: React.FC = () => {
                   </div>
                 </div>
               ))
+            )}
+
+            {/* Load More button */}
+            {activeTab === 'all' && hasNextPage && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700/50 text-slate-300 hover:text-white font-bold rounded-xl text-sm transition-all disabled:opacity-50"
+                >
+                  {loadingMore ? (
+                    <span className="w-4 h-4 border-2 border-slate-400/30 border-t-slate-300 rounded-full animate-spin" />
+                  ) : null}
+                  {loadingMore ? 'Loading...' : 'Load More Issues'}
+                </button>
+              </div>
             )}
           </div>
 

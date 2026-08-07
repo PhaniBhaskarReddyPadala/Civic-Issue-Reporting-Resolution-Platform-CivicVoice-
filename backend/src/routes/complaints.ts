@@ -86,11 +86,14 @@ router.post(
         },
       });
 
-      await ComplaintDetails.create({
-        complaintId: complaint.id,
-        description: parsedBody.description,
-        imageUrl,
-      });
+      // Use upsert instead of create to safely overwrite any stale orphaned
+      // MongoDB document that may exist if a previous complaint with the same
+      // PostgreSQL auto-increment ID was deleted without cleaning up MongoDB.
+      await ComplaintDetails.findOneAndUpdate(
+        { complaintId: complaint.id },
+        { $set: { description: parsedBody.description, imageUrl, resolutionImageUrl: null } },
+        { upsert: true, new: true }
+      );
 
       res.status(201).json({
         ...complaint,
@@ -108,66 +111,85 @@ router.post(
   }
 );
 
-// 2. Get All/Trending Complaints (Public)
+// 2. Get All/Trending Complaints (Public) — paginated
 router.get('/', async (req, res: Response) => {
-  const { sort, category, status } = req.query;
+  const { sort, category, status, page, limit } = req.query;
+
+  // Pagination defaults: page 1, 12 items per page
+  const pageNum  = Math.max(1, parseInt(page as string)  || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit as string) || 12));
+  const skip     = (pageNum - 1) * limitNum;
 
   try {
     const filters: any = {};
     if (category) filters.category = category as string;
-    if (status) filters.status = status as string;
+    if (status)   filters.status   = status   as string;
 
-    const complaints = await prisma.complaint.findMany({
-      where: filters,
-      include: {
-        user: { select: { id: true, name: true } },
-        officer: { select: { id: true, name: true } },
-        votes: true,
-        follows: true,
-      },
-    });
+    // Run count + page fetch in parallel
+    const [totalCount, complaints] = await Promise.all([
+      prisma.complaint.count({ where: filters }),
+      prisma.complaint.findMany({
+        where: filters,
+        skip,
+        take: limitNum,
+        orderBy: sort === 'trending'
+          ? { votes: { _count: 'desc' } }
+          : { createdAt: 'desc' },
+        include: {
+          user:    { select: { id: true, name: true } },
+          officer: { select: { id: true, name: true } },
+          votes:   true,
+          follows: true,
+        },
+      }),
+    ]);
 
-    const complaintIds = complaints.map((c) => c.id);
-    const mongoDetails = await ComplaintDetails.find({ complaintId: { $in: complaintIds } });
-    const detailsMap = new Map(mongoDetails.map((d) => [d.complaintId, d]));
+    const complaintIds  = complaints.map((c) => c.id);
+    const mongoDetails  = await ComplaintDetails.find({ complaintId: { $in: complaintIds } });
+    const detailsMap    = new Map(mongoDetails.map((d) => [d.complaintId, d]));
 
     const mappedComplaints = complaints.map((c) => {
       const details = detailsMap.get(c.id);
       return {
-        id: c.id,
-        title: c.title,
-        category: c.category,
-        status: c.status,
-        lat: c.lat,
-        lng: c.lng,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-        userId: c.userId,
-        reporterName: c.user.name,
-        officerId: c.officerId,
-        officerName: c.officer?.name || null,
-        departmentId: c.departmentId,
-        votesCount: c.votes.length,
-        followsCount: c.follows.length,
-        votes: c.votes.map((v) => v.userId),
-        follows: c.follows.map((f) => f.userId),
-        description: details?.description || '',
-        imageUrl: details?.imageUrl || '',
+        id:                 c.id,
+        title:              c.title,
+        category:           c.category,
+        status:             c.status,
+        lat:                c.lat,
+        lng:                c.lng,
+        createdAt:          c.createdAt,
+        updatedAt:          c.updatedAt,
+        userId:             c.userId,
+        reporterName:       c.user.name,
+        officerId:          c.officerId,
+        officerName:        c.officer?.name || null,
+        departmentId:       c.departmentId,
+        votesCount:         c.votes.length,
+        followsCount:       c.follows.length,
+        votes:              c.votes.map((v) => v.userId),
+        follows:            c.follows.map((f) => f.userId),
+        description:        details?.description    || '',
+        imageUrl:           details?.imageUrl        || '',
         resolutionImageUrl: details?.resolutionImageUrl || null,
       };
     });
 
-    if (sort === 'trending') {
-      mappedComplaints.sort((a, b) => b.votesCount - a.votesCount);
-    } else {
-      mappedComplaints.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    }
-
-    res.json(mappedComplaints);
+    res.json({
+      data:       mappedComplaints,
+      pagination: {
+        page:       pageNum,
+        limit:      limitNum,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limitNum),
+        hasNextPage: pageNum < Math.ceil(totalCount / limitNum),
+        hasPrevPage: pageNum > 1,
+      },
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // 3. Get Officer Assigned Complaints (Officer only)
 router.get('/officer/assigned', authenticateToken, async (req: AuthRequest, res: Response) => {

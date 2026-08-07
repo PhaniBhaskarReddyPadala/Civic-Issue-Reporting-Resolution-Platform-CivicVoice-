@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
+// Load environment variables FIRST — before anything reads process.env
+dotenv.config();
+
 // Import configs & database connections
 import { connectMongoDB, prisma } from './config/db';
 
@@ -11,15 +14,28 @@ import departmentsRouter from './routes/departments';
 import complaintsRouter from './routes/complaints';
 import civicUpdatesRouter from './routes/civicUpdates';
 
-// Load environment variables
-dotenv.config();
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Enable CORS and JSON body parsing
-app.use(cors());
+// ── CORS ─────────────────────────────────────────────────────────────────────
+// In production, restrict to the deployed frontend URL only.
+// In development, allow all origins (Vite dev proxy handles /api calls).
+const allowedOrigin = process.env.FRONTEND_URL || '*';
+app.use(
+  cors({
+    origin: allowedOrigin,
+    credentials: true,
+  })
+);
+
+// JSON body parsing (up to 15 MB for base64 image uploads)
 app.use(express.json({ limit: '15mb' }));
+
+// ── Health Check ──────────────────────────────────────────────────────────────
+// Used by Render (and any load balancer) to verify the service is alive.
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Mount sub-routers
 app.use('/api/auth', authRouter);
@@ -29,8 +45,17 @@ app.use('/api/civic-updates', civicUpdatesRouter);
 
 // Bootstrap Server & Database Connections
 const bootstrap = async () => {
-  // Connect to MongoDB
+  // Connect to MongoDB (non-fatal — image features degrade gracefully)
   await connectMongoDB();
+
+  // Connect to PostgreSQL via Prisma — fail fast if unreachable
+  try {
+    await prisma.$connect();
+    console.log('Connected to PostgreSQL via Prisma.');
+  } catch (error) {
+    console.error('FATAL: Could not connect to PostgreSQL:', error);
+    process.exit(1);
+  }
 
   // Seed default departments in PostgreSQL if they do not exist
   try {
@@ -57,6 +82,11 @@ const bootstrap = async () => {
   // Start Express API server
   app.listen(PORT, () => {
     console.log(`CivicFlow API server running on port ${PORT}`);
+    if (process.env.FRONTEND_URL) {
+      console.log(`CORS restricted to: ${process.env.FRONTEND_URL}`);
+    } else {
+      console.warn('⚠️  FRONTEND_URL not set — CORS is open to all origins (dev mode)');
+    }
   });
 };
 

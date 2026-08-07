@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import {
   Send,
   AlertTriangle,
@@ -46,14 +47,18 @@ export const OfficerDashboard: React.FC = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    // Call the updated endpoint mapping `/api/complaints/officer/assigned`
-    axios.get('/api/complaints/officer/assigned')
-      .then((res) => setComplaints(res.data))
-      .catch((err) => console.error(err));
-
-    axios.get('/api/civic-updates')
-      .then((res) => setUpdates(res.data))
-      .catch((err) => console.error(err));
+    Promise.all([
+      axios.get('/api/complaints/officer/assigned'),
+      axios.get('/api/civic-updates'),
+    ])
+      .then(([complaintsRes, updatesRes]) => {
+        setComplaints(complaintsRes.data);
+        setUpdates(updatesRes.data);
+      })
+      .catch((err) => {
+        console.error(err);
+        toast.error('Failed to load dashboard data.');
+      });
   }, [refreshTrigger]);
 
   const handleAnnouncementSubmit = async (e: React.FormEvent) => {
@@ -72,9 +77,11 @@ export const OfficerDashboard: React.FC = () => {
       setUpdateContent('');
       setUpdateType('Road construction');
       setRefreshTrigger((prev) => prev + 1);
-      alert('Civic update successfully broadcasted to citizens!');
+      toast.success('Civic update broadcasted to all citizens!');
     } catch (err: any) {
-      setAnnouncementError(err.response?.data?.error || 'Failed to post civic update.');
+      const msg = err.response?.data?.error || 'Failed to post civic update.';
+      setAnnouncementError(msg);
+      toast.error(msg);
     } finally {
       setAnnouncementSubmitting(false);
     }

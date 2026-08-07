@@ -6,6 +6,7 @@ import {
   Navigate
 } from 'react-router-dom';
 import axios from 'axios';
+import { Toaster } from 'react-hot-toast';
 
 // Import Auth Context
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -19,8 +20,9 @@ import CitizenDashboard from './pages/CitizenDashboard';
 import OfficerDashboard from './pages/OfficerDashboard';
 import ComplaintDetailView from './pages/ComplaintDetailView';
 
-// Axios defaults
-axios.defaults.baseURL = '/';
+// Axios defaults — in production, VITE_API_URL points to the deployed Render backend.
+// In dev, it falls back to '/' which Vite's proxy rewrites to localhost:5000.
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || '/';
 
 // Protected Route for Citizens
 const CitizenRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -43,6 +45,21 @@ export default function App() {
     <AuthProvider>
       <Router>
         <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-brand-500/30 selection:text-brand-100">
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: {
+                background: '#1e293b',
+                color: '#f1f5f9',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontWeight: '600',
+              },
+              success: { iconTheme: { primary: '#10b981', secondary: '#0f172a' } },
+              error:   { iconTheme: { primary: '#ef4444', secondary: '#0f172a' } },
+            }}
+          />
           <Navbar />
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
             <Routes>
