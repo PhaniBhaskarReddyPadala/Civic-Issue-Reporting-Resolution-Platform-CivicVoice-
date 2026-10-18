@@ -1,9 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
 
 // Load environment variables FIRST — before anything reads process.env
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config(); // fallback to cwd
 
 // Import configs & database connections
 import { connectMongoDB, prisma } from './config/db';
@@ -96,7 +98,7 @@ const bootstrap = async () => {
   }
 
   // Start Express API server
-  app.listen(PORT, () => {
+  app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`CivicFlow API server running on port ${PORT}`);
     if (process.env.FRONTEND_URL) {
       console.log(`CORS restricted to: ${process.env.FRONTEND_URL}`);

@@ -46,7 +46,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ isRegister }) => {
         navigate('/');
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Authentication failed. Please try again.');
+      const serverError = err.response?.data?.error;
+      if (typeof serverError === 'string') {
+        setError(serverError);
+      } else if (Array.isArray(serverError)) {
+        setError(serverError.map((e: any) => e.message).join(', '));
+      } else if (err.message === 'Network Error' || !err.response) {
+        setError('Cannot connect to the server. Please ensure the backend is running.');
+      } else {
+        setError('Authentication failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
