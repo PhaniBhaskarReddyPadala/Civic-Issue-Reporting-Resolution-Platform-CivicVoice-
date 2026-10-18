@@ -1,31 +1,40 @@
 services:
   - type: web
     name: civicvoice-backend
-    runtime: docker
+    env: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: free
     healthCheckPath: /health
+
     envVars:
       - key: NODE_ENV
         value: production
+
       - key: PORT
-        value: 10000
-      # ── Secrets: set these manually in the Render dashboard ──
+        value: "10000"
+
+      # Secrets — Set these manually in the Render Dashboard
       - key: DATABASE_URL
         sync: false
+
       - key: MONGODB_URI
         sync: false
+
       - key: JWT_SECRET
         sync: false
-      # ── Set to your Vercel frontend URL after first deploy ──
-      # https://civic-issue-reporting-resolution-platform-civic-voice.vercel.app
+
+      # Set to your Vercel frontend URL after deployment
       - key: FRONTEND_URL
         sync: false
-      # ── Optional: Cloudinary image CDN ──
+
+      # Cloudinary CDN Configuration (Optional)
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
+
       - key: CLOUDINARY_API_KEY
         sync: false
+
       - key: CLOUDINARY_API_SECRET
         sync: false
+
